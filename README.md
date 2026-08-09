@@ -1,133 +1,245 @@
 # Homelab Proxmox VMs
 
-Laboratório de infraestrutura construído utilizando **Proxmox VE**.
+Laboratório de infraestrutura virtual desenvolvido com **Proxmox VE**, **Ubuntu Server** e **NFS**.
 
-Este projeto tem como objetivo criar e documentar a infraestrutura virtual que será utilizada posteriormente pelo projeto **Homelab Kubernetes**.
+Este projeto tem como objetivo criar uma infraestrutura virtual reproduzível para estudos práticos de **Linux, virtualização, redes, armazenamento, infraestrutura e Kubernetes**.
 
-O laboratório foi desenvolvido com foco em estudos práticos de:
+A infraestrutura criada neste projeto será utilizada posteriormente pelo projeto de Kubernetes:
 
-* Linux
-* Virtualização
-* Proxmox VE
-* Redes
-* Armazenamento
-* NFS
-* Infraestrutura como código
-* Kubernetes
-
-A proposta é criar uma infraestrutura reproduzível, organizada e documentada, permitindo recriar o ambiente sempre que necessário.
+**Homelab Kubernetes**
 
 ---
 
-## Arquitetura
+## 📋 Objetivo
 
-O ambiente será composto por quatro máquinas virtuais:
+Construir uma infraestrutura de laboratório utilizando Proxmox VE, composta por:
 
 * 1 servidor NFS
 * 1 Kubernetes Control Plane
 * 2 Kubernetes Worker Nodes
 
+O projeto foi dimensionado para um servidor físico com recursos limitados, permitindo estudar Kubernetes em um ambiente real de laboratório.
+
+---
+
+## 🏗️ Arquitetura
+
 ```text
-                         Gateway
-                       10.10.1.1
-                           |
-                           |
-                    Proxmox VE
-                    10.10.1.254
-                           |
-                        vmbr0
-                    10.10.1.0/24
-                           |
-          +----------------+----------------+
-          |                |                |
-          |                |                |
-      NFS Server       Kubernetes        Kubernetes
-      10.10.1.240       Cluster           Cluster
-          |                |                |
-          |          +-----+-----+          |
-          |          |           |          |
-          |          |           |          |
-          |       Master      Workers       |
-          |       .241        .242           |
-          |                   .243           |
-          |                                  |
-          +----------------------------------+
-                    NFS Storage
+                         Internet / LAN
+                              |
+                         10.10.1.1
+                           Gateway
+                              |
+                              |
+                    ┌───────────────────┐
+                    │    Proxmox VE     │
+                    │    10.10.1.254    │
+                    │                   │
+                    │      vmbr0        │
+                    └─────────┬─────────┘
+                              |
+             ┌────────────────┼────────────────┐
+             |                |                |
+             |                |                |
+             ▼                ▼                ▼
+      ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
+      │ NFS Server  │ │ K8s Master  │ │ K8s Workers │
+      │             │ │             │ │             │
+      │ .240        │ │ .241        │ │ .242        │
+      │             │ │             │ │ .243        │
+      │ 2 vCPU      │ │ 4 vCPU      │ │ 4 vCPU      │
+      │ 2 GB RAM    │ │ 4 GB RAM    │ │ 2 GB RAM    │
+      │ 100 GB      │ │ 50 GB       │ │ 50 GB       │
+      └──────┬──────┘ └─────────────┘ └─────────────┘
+             |
+             |
+        NFS Storage
+             |
+             ▼
+      Kubernetes PV/PVC
 ```
 
 ---
 
-## Máquinas Virtuais
+## 🖥️ Hardware do Host
 
-| VMID | Hostname        | Endereço IP   | Função                   |    CPU |  RAM |  Disco |
-| ---: | --------------- | ------------- | ------------------------ | -----: | ---: | -----: |
-|  191 | `k8s-master-01` | `10.10.1.241` | Kubernetes Control Plane | 4 vCPU | 8 GB |  50 GB |
-|  201 | `k8s-worker-01` | `10.10.1.242` | Kubernetes Worker        | 4 vCPU | 8 GB |  50 GB |
-|  202 | `k8s-worker-02` | `10.10.1.243` | Kubernetes Worker        | 4 vCPU | 8 GB |  50 GB |
-|  210 | `nfs-server`    | `10.10.1.240` | Servidor NFS             | 2 vCPU | 4 GB | 100 GB |
+O laboratório está hospedado em um servidor físico com:
+
+| Recurso     | Configuração                     |
+| ----------- | -------------------------------- |
+| Processador | Intel Xeon E3-1226 v3 @ 3.30 GHz |
+| Sockets     | 1                                |
+| Cores       | 4                                |
+| Threads     | 4                                |
+| Memória RAM | 16 GB                            |
+| Swap        | 8 GB                             |
+| Disco 1     | Kingston SA400S37120G - 120 GB   |
+| Disco 2     | Samsung SSD 860 EVO - 500 GB     |
+
+### CPU
+
+O servidor possui **4 cores físicos e 4 threads**.
+
+As máquinas virtuais utilizam um total de **14 vCPUs**, resultando em um overcommit de CPU de aproximadamente **3,5:1**.
+
+Esse overcommit é intencional, pois o ambiente possui finalidade educacional e de laboratório.
 
 ---
 
-## Rede
+## 🔧 Proxmox VE
 
-| Componente           | Configuração   |
+Versões utilizadas:
+
+| Componente  | Versão      |
+| ----------- | ----------- |
+| Proxmox VE  | 9.1.0       |
+| PVE Manager | 9.1.14      |
+| Kernel      | 7.0.2-4-pve |
+| QEMU/KVM    | 11.0.0-2    |
+| ZFS         | 2.4.2-pve1  |
+| Ceph        | 19.2.3-pve2 |
+
+Para verificar a versão do ambiente:
+
+```bash
+pveversion -v
+```
+
+---
+
+## 🌐 Rede
+
+A infraestrutura utiliza a rede local `10.10.1.0/24`.
+
+| Componente           | Endereço       |
 | -------------------- | -------------- |
 | Rede                 | `10.10.1.0/24` |
 | Gateway              | `10.10.1.1`    |
-| Proxmox VE           | `10.10.1.254`  |
+| Proxmox              | `10.10.1.254`  |
 | Bridge               | `vmbr0`        |
 | NFS Server           | `10.10.1.240`  |
 | Kubernetes Master    | `10.10.1.241`  |
 | Kubernetes Worker 01 | `10.10.1.242`  |
 | Kubernetes Worker 02 | `10.10.1.243`  |
 
+Configuração da bridge no Proxmox:
+
+```text
+nic0
+  |
+  ▼
+vmbr0
+  |
+  ├── NFS Server
+  ├── Kubernetes Master
+  ├── Kubernetes Worker 01
+  └── Kubernetes Worker 02
+```
+
 ---
 
-## Armazenamento
+## 💻 Máquinas Virtuais
 
-As máquinas virtuais serão armazenadas no storage ZFS do Proxmox:
+| VMID | Hostname        | Função                   |    CPU |  RAM |  Disco | IP            |
+| ---: | --------------- | ------------------------ | -----: | ---: | -----: | ------------- |
+|  191 | `k8s-master-01` | Kubernetes Control Plane | 4 vCPU | 4 GB |  50 GB | `10.10.1.241` |
+|  201 | `k8s-worker-01` | Kubernetes Worker        | 4 vCPU | 2 GB |  50 GB | `10.10.1.242` |
+|  202 | `k8s-worker-02` | Kubernetes Worker        | 4 vCPU | 2 GB |  50 GB | `10.10.1.243` |
+|  210 | `nfs-server`    | NFS Server               | 2 vCPU | 2 GB | 100 GB | `10.10.1.240` |
+
+### Recursos alocados
+
+```text
+CPU:
+14 vCPU
+
+Memória:
+10 GB
+
+Storage:
+250 GB
+```
+
+O restante dos recursos físicos permanece disponível para o Proxmox VE e seus serviços.
+
+---
+
+## 💾 Storage
+
+As máquinas virtuais são armazenadas no pool ZFS:
 
 ```text
 zfs-s001
 ```
 
-Distribuição planejada:
+Distribuição:
+
+| VM              |      Disco |
+| --------------- | ---------: |
+| `k8s-master-01` |      50 GB |
+| `k8s-worker-01` |      50 GB |
+| `k8s-worker-02` |      50 GB |
+| `nfs-server`    |     100 GB |
+| **Total**       | **250 GB** |
+
+O servidor NFS será utilizado posteriormente como backend de armazenamento persistente para o Kubernetes.
+
+---
+
+## 📦 NFS
+
+O servidor NFS será responsável por fornecer armazenamento compartilhado para o cluster Kubernetes.
+
+Servidor:
 
 ```text
-NFS Server       100 GB
-K8s Master        50 GB
-K8s Worker 01     50 GB
-K8s Worker 02     50 GB
-------------------------
-Total             250 GB
+Hostname: nfs-server
+IP:       10.10.1.240
+Storage:  100 GB
 ```
 
-O servidor NFS será utilizado posteriormente pelo cluster Kubernetes para fornecer armazenamento persistente através de **Persistent Volumes (PV)**.
+Diretório planejado:
+
+```text
+/srv/nfs/k8s
+```
+
+A utilização do NFS permitirá trabalhar posteriormente com:
+
+* PersistentVolume (PV)
+* PersistentVolumeClaim (PVC)
+* StorageClass
+* ReadWriteMany (RWX)
+* Provisionamento dinâmico
 
 ---
 
-## Configuração das VMs
+## ⚙️ Configuração das VMs
 
-As máquinas virtuais utilizarão:
+As máquinas virtuais utilizam:
 
-* CPU: `host`
-* Rede: VirtIO
-* Disco: VirtIO SCSI
-* Controladora: `virtio-scsi-single`
-* QEMU Guest Agent: habilitado
-* Memory Ballooning: desabilitado
-* Discard: habilitado
-* I/O Thread: habilitado
+* CPU `host`
+* Controladora `virtio-scsi-single`
+* Disco VirtIO SCSI
+* Interface de rede VirtIO
+* Bridge `vmbr0`
+* QEMU Guest Agent habilitado
+* Memory Ballooning desabilitado
+* Discard habilitado
+* I/O Thread habilitado
+* Inicialização automática habilitada
 
 ---
 
-## Sistema Operacional
+## 🐧 Sistema Operacional
 
-As máquinas virtuais utilizarão:
+As máquinas virtuais utilizam:
 
-**Ubuntu Server**
+```text
+Ubuntu Server
+```
 
-Imagem utilizada:
+ISO utilizada:
 
 ```text
 ubuntu-26.04-live-server-amd64.iso
@@ -135,7 +247,7 @@ ubuntu-26.04-live-server-amd64.iso
 
 ---
 
-## Estrutura do Projeto
+## 📁 Estrutura do Projeto
 
 ```text
 homelab-proxmox-vms/
@@ -143,148 +255,200 @@ homelab-proxmox-vms/
 ├── README.md
 │
 ├── docs/
-│   ├── 01-arquitetura.md
-│   ├── 02-rede.md
-│   ├── 03-armazenamento.md
-│   ├── 04-maquinas-virtuais.md
-│   └── 05-servidor-nfs.md
+│   ├── architecture.md
+│   └── network.md
 │
 ├── scripts/
-│   ├── create-vm.sh
-│   ├── create-cluster-vms.sh
-│   └── destroy-vms.sh
+│   └── create-vm.sh
 │
-├── config/
-│   └── lab.env.example
-│
-└── diagrams/
-    └── architecture.md
+└── .gitignore
 ```
 
 ---
 
-## Escopo do Projeto
+## 🚀 Criação das VMs
 
-Este repositório é responsável exclusivamente pela **infraestrutura virtual** do laboratório.
+As máquinas virtuais são criadas utilizando o script:
 
-### Incluído
+```bash
+scripts/create-vm.sh
+```
 
-* Configuração do Proxmox VE
-* Criação das máquinas virtuais
-* CPU e memória
-* Discos virtuais
-* Rede virtual
-* Instalação do Ubuntu Server
-* Configuração de hostname
-* Configuração de endereçamento IP
-* Configuração do servidor NFS
-* Preparação da infraestrutura para o Kubernetes
+Exemplo:
 
-### Não incluído
+```bash
+./scripts/create-vm.sh 191 k8s-master-01 4 4096 50
+```
 
-A instalação e configuração do Kubernetes serão realizadas em um projeto separado:
-
-**Homelab Kubernetes**
-
-O projeto Kubernetes será responsável por:
-
-* containerd
-* kubeadm
-* kubelet
-* kubectl
-* Kubernetes
-* CNI
-* MetalLB
-* Persistent Volumes
-* Storage
-* Ingress
-* Aplicações
-
----
-
-## Objetivo
-
-O objetivo deste projeto é criar uma infraestrutura de laboratório que possa ser utilizada como base para estudos de:
+Parâmetros:
 
 ```text
-Proxmox
-   │
-   ├── Virtualização
-   ├── Linux
-   ├── Networking
-   ├── Storage
-   └── NFS
-          │
-          ▼
-     Kubernetes
-          │
-          ├── CNI
-          ├── MetalLB
-          ├── Storage
-          └── Ingress
+VMID
+Nome
+Quantidade de vCPUs
+Memória em MB
+Disco em GB
+```
+
+Exemplo para o servidor NFS:
+
+```bash
+./scripts/create-vm.sh 210 nfs-server 2 2048 100
 ```
 
 ---
 
-## Status do Projeto
+## 🔍 Verificação das VMs
 
-🚧 **Em desenvolvimento**
+Para listar as máquinas virtuais:
+
+```bash
+qm list
+```
+
+Para verificar a configuração de uma VM:
+
+```bash
+qm config 191
+```
+
+Para verificar o status:
+
+```bash
+qm status 191
+```
+
+---
+
+## 📊 Monitoramento do Host
+
+Comandos utilizados para verificar os recursos do Proxmox:
+
+### CPU
+
+```bash
+lscpu
+```
+
+### Memória
+
+```bash
+free -h
+```
+
+### Discos
+
+```bash
+lsblk -d -o NAME,SIZE,MODEL
+```
+
+### Storage Proxmox
+
+```bash
+pvesm status
+```
+
+### ZFS
+
+```bash
+zpool status
+```
+
+```bash
+zpool list
+```
+
+```bash
+zfs list
+```
+
+---
+
+## 🗺️ Roadmap
 
 ### Infraestrutura
 
-* [x] Proxmox VE configurado
-* [x] Rede `vmbr0`
-* [x] Storage ZFS
-* [ ] Criação das máquinas virtuais
-* [ ] Instalação do Ubuntu Server
-* [ ] Configuração dos hostnames
-* [ ] Configuração dos endereços IP
-* [ ] Configuração do servidor NFS
-* [ ] Testes de conectividade
-* [ ] Documentação da infraestrutura
+* [x] Instalação do Proxmox VE
+* [x] Configuração da rede `vmbr0`
+* [x] Configuração do storage ZFS
+* [x] Criação das máquinas virtuais
+* [x] Configuração de CPU e memória
+* [x] Configuração dos discos
+* [x] Configuração da rede virtual
+* [x] Instalação do Ubuntu Server no `k8s-master-01`
+* [x] Configuração do IP do `k8s-master-01`
+* [ ] Instalação do Ubuntu no `k8s-worker-01`
+* [ ] Instalação do Ubuntu no `k8s-worker-02`
+* [ ] Instalação do Ubuntu no `nfs-server`
+* [ ] Configuração do NFS
+* [ ] Testes de conectividade entre as VMs
+* [ ] Documentação completa
 
-### Próxima etapa
+### Kubernetes
 
-Após a conclusão deste projeto, a infraestrutura estará preparada para receber o segundo projeto:
-
-**Homelab Kubernetes**
+A instalação do Kubernetes será realizada em um projeto separado.
 
 ---
 
-## Projetos relacionados
+## 🔗 Projeto Kubernetes
 
-Este projeto faz parte de um laboratório maior dividido em duas etapas:
-
-### 1. Homelab Proxmox VMs
-
-Infraestrutura e máquinas virtuais.
+Após a conclusão da infraestrutura, será utilizado o projeto:
 
 ```text
-Proxmox
-   │
-   ├── NFS Server
-   ├── Kubernetes Master
-   ├── Kubernetes Worker 01
-   └── Kubernetes Worker 02
+homelab-kubernetes
 ```
 
-### 2. Homelab Kubernetes
+Esse projeto será responsável pela instalação e configuração do cluster Kubernetes.
 
-Instalação e configuração da plataforma Kubernetes.
+Componentes planejados:
 
 ```text
 Kubernetes
-   │
-   ├── Control Plane
-   ├── Worker Nodes
-   ├── CNI
-   ├── MetalLB
-   ├── NFS Storage
-   └── Ingress
+├── kubeadm
+├── kubelet
+├── kubectl
+├── containerd
+├── CNI
+├── MetalLB
+├── NFS Storage
+├── Ingress Controller
+└── Aplicações
 ```
 
 ---
 
-## Licença
+## 🎯 Objetivos de Aprendizado
 
-Este projeto foi desenvolvido para fins de estudo, laboratório e aprendizado prático de infraestrutura, virtualização e Kubernetes.
+Este laboratório tem como objetivo desenvolver conhecimentos práticos em:
+
+* Linux
+* Proxmox VE
+* Virtualização
+* Redes
+* TCP/IP
+* Storage
+* ZFS
+* NFS
+* Containers
+* Kubernetes
+* Networking no Kubernetes
+* MetalLB
+* Persistent Volumes
+* Infrastructure as Code
+* Git e GitHub
+* DevOps
+
+---
+
+## 📌 Status
+
+🚧 **Projeto em desenvolvimento**
+
+A infraestrutura Proxmox e as máquinas virtuais já foram criadas. A próxima etapa é concluir a instalação e configuração dos sistemas operacionais e do servidor NFS.
+
+---
+
+## 📄 Licença
+
+Este projeto foi desenvolvido para fins de estudo, laboratório e aprendizado prático de infraestrutura, virtualização, Linux e Kubernetes.
+
