@@ -1,0 +1,14 @@
+# Configurações locais
+config/lab.env
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# Editores
+.vscode/
+.idea/
+
+# Arquivos temporários
+*.tmp
+*.log
