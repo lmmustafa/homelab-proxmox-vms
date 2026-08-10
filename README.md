@@ -45,9 +45,9 @@ O ambiente foi dimensionado para um servidor físico com recursos limitados, per
       │             │ │             │ │             │
       │ 10.10.1.240 │ │ 10.10.1.241 │ │ 10.10.1.242 │
       │             │ │             │ │ 10.10.1.243 │
-      │ 2 vCPU      │ │ 2 vCPU      │ │ 2 vCPU cada │
-      │ 2 GB RAM    │ │ 4 GB RAM    │ │ 2 GB cada   │
-      │ 100 GB      │ │ 50 GB       │ │ 50 GB cada  │
+      │ 2 vCPU      │ │ 2 vCPU      │ │ 2 vCPU      │
+      │ 2 GB RAM    │ │ 4 GB RAM    │ │ 2 GB RAM    │
+      │ 100 GB      │ │ 50 GB       │ │ 50 GB       │
       └──────┬──────┘ └─────────────┘ └─────────────┘
              |
              ▼
@@ -203,7 +203,7 @@ Distribuição:
 | `nfs-server`    |     100 GB |
 | **Total**       | **250 GB** |
 
-O servidor NFS será utilizado posteriormente como backend de armazenamento persistente para o Kubernetes.
+O servidor NFS utiliza sua VM para fornecer armazenamento compartilhado ao futuro cluster Kubernetes.
 
 ---
 
@@ -217,21 +217,44 @@ IP:       10.10.1.240
 Storage:  100 GB
 ```
 
-será responsável por fornecer armazenamento compartilhado para o cluster Kubernetes.
-
-Diretório planejado:
+Export configurado:
 
 ```text
 /srv/nfs/k8s
 ```
 
-Posteriormente serão utilizados:
+Rede autorizada:
 
-* PersistentVolume (PV)
-* PersistentVolumeClaim (PVC)
-* StorageClass
-* ReadWriteMany (RWX)
-* Provisionamento dinâmico
+```text
+10.10.1.0/24
+```
+
+Configuração utilizada:
+
+```text
+/srv/nfs/k8s 10.10.1.0/24(rw,sync,no_subtree_check,no_root_squash)
+```
+
+O NFS será utilizado posteriormente como backend de armazenamento persistente para o Kubernetes.
+
+### Validação do NFS
+
+O NFS foi validado com sucesso pelos três nós Kubernetes:
+
+| Nó              | IP            | Conectividade | Export | Montagem | Escrita | Leitura | Desmontagem |
+| --------------- | ------------- | :-----------: | :----: | :------: | :-----: | :-----: | :---------: |
+| `k8s-master-01` | `10.10.1.241` |       ✅       |    ✅   |     ✅    |    ✅    |    ✅    |      ✅      |
+| `k8s-worker-01` | `10.10.1.242` |       ✅       |    ✅   |     ✅    |    ✅    |    ✅    |      ✅      |
+| `k8s-worker-02` | `10.10.1.243` |       ✅       |    ✅   |     ✅    |    ✅    |    ✅    |      ✅      |
+
+O teste validou:
+
+* Conectividade com o servidor NFS
+* Export `/srv/nfs/k8s`
+* Montagem do compartilhamento
+* Escrita de arquivos
+* Leitura de arquivos
+* Desmontagem
 
 ---
 
@@ -287,6 +310,8 @@ scripts/
 ├── configure-network.sh
 ├── configure-hosts.sh
 ├── install-packages.sh
+├── configure-nfs.sh
+├── test-nfs.sh
 └── check-vms.sh
 ```
 
@@ -330,6 +355,29 @@ Instala ferramentas básicas utilizadas durante a preparação das VMs, incluind
 * traceroute
 * chrony
 * QEMU Guest Agent
+
+### `configure-nfs.sh`
+
+Automatiza a configuração do servidor NFS:
+
+* Instalação dos pacotes NFS
+* Criação do diretório `/srv/nfs/k8s`
+* Configuração do `/etc/exports`
+* Aplicação dos exports
+* Inicialização do serviço NFS
+* Validação da configuração
+
+### `test-nfs.sh`
+
+Realiza testes completos do NFS:
+
+* Conectividade
+* Resolução do hostname
+* Export
+* Montagem
+* Escrita
+* Leitura
+* Desmontagem
 
 ### `check-vms.sh`
 
@@ -435,6 +483,8 @@ homelab-proxmox-vms/
 │   ├── configure-network.sh
 │   ├── configure-hosts.sh
 │   ├── install-packages.sh
+│   ├── configure-nfs.sh
+│   ├── test-nfs.sh
 │   └── check-vms.sh
 │
 └── .gitignore
@@ -462,13 +512,37 @@ homelab-proxmox-vms/
 * [x] Testes de conectividade entre as VMs
 * [x] Script de validação das VMs
 * [x] Diagrama da arquitetura
-* [ ] Configuração do NFS
-* [ ] Testes de montagem do NFS
-* [ ] Documentação final da infraestrutura
+
+### NFS
+
+* [x] Instalação do NFS Server
+* [x] Criação do `/srv/nfs/k8s`
+* [x] Configuração do `/etc/exports`
+* [x] Exportação do storage
+* [x] Teste no `k8s-master-01`
+* [x] Teste no `k8s-worker-01`
+* [x] Teste no `k8s-worker-02`
+* [x] Validação de escrita e leitura
+* [x] Validação de montagem e desmontagem
 
 ### Kubernetes
 
 A instalação do Kubernetes será realizada em um projeto separado.
+
+* [ ] Preparação dos nós
+* [ ] Instalação do containerd
+* [ ] Configuração do kernel
+* [ ] Configuração do sysctl
+* [ ] Instalação do kubeadm
+* [ ] Instalação do kubelet
+* [ ] Instalação do kubectl
+* [ ] Inicialização do Control Plane
+* [ ] Adição dos Workers
+* [ ] Instalação do CNI
+* [ ] Configuração do MetalLB
+* [ ] Integração com NFS
+* [ ] Persistent Volumes
+* [ ] Persistent Volume Claims
 
 ---
 
@@ -529,15 +603,28 @@ O objetivo não é apenas criar as máquinas virtuais, mas entender cada etapa d
 
 ## 📌 Status
 
-🟢 **Infraestrutura das VMs concluída**
+🟢 **Infraestrutura Proxmox + VMs + NFS concluída**
 
-As quatro máquinas virtuais foram criadas e preparadas:
+A infraestrutura possui atualmente:
 
 ```text
-k8s-master-01     10.10.1.241    2 vCPU / 4 GB RAM
-k8s-worker-01     10.10.1.242    2 vCPU / 2 GB RAM
-k8s-worker-02     10.10.1.243    2 vCPU / 2 GB RAM
-nfs-server        10.10.1.240    2 vCPU / 2 GB RAM
+Proxmox VE
+    │
+    ├── k8s-master-01
+    │      10.10.1.241
+    │      2 vCPU / 4 GB RAM
+    │
+    ├── k8s-worker-01
+    │      10.10.1.242
+    │      2 vCPU / 2 GB RAM
+    │
+    ├── k8s-worker-02
+    │      10.10.1.243
+    │      2 vCPU / 2 GB RAM
+    │
+    └── nfs-server
+           10.10.1.240
+           2 vCPU / 2 GB RAM
 ```
 
 Recursos totais alocados:
@@ -548,7 +635,22 @@ Recursos totais alocados:
 250 GB Storage
 ```
 
-A infraestrutura está pronta para a próxima etapa: **configuração do servidor NFS e preparação do ambiente Kubernetes**.
+### NFS
+
+O NFS Server está configurado e foi validado com sucesso pelos três nós Kubernetes.
+
+```text
+NFS Server
+10.10.1.240
+    │
+    ├── k8s-master-01  ✅
+    ├── k8s-worker-01  ✅
+    └── k8s-worker-02  ✅
+```
+
+A infraestrutura está pronta para a próxima fase:
+
+**Preparação e instalação do cluster Kubernetes.**
 
 ---
 
