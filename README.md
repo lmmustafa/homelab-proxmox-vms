@@ -57,6 +57,10 @@ O ambiente foi dimensionado para um servidor físico com recursos limitados, per
       Kubernetes PV/PVC
 ```
 
+### Diagrama visual
+
+![Arquitetura do Homelab](diagrams/homelab-architecture.png)
+
 ---
 
 ## 🖥️ Hardware do Host
@@ -139,7 +143,7 @@ A infraestrutura utiliza a rede local:
 | Kubernetes Worker 01 | `10.10.1.242`  |
 | Kubernetes Worker 02 | `10.10.1.243`  |
 
-Configuração da bridge:
+### Bridge
 
 ```text
 nic0
@@ -246,9 +250,7 @@ As máquinas virtuais utilizam:
 * I/O Thread habilitado
 * Firewall da interface habilitado
 
-O QEMU Guest Agent permite a comunicação entre o Proxmox e o sistema operacional das VMs.
-
-Validação:
+Validação do QEMU Guest Agent:
 
 ```bash
 qm agent 191 ping
@@ -354,8 +356,6 @@ VMID     HOSTNAME               STATUS       IP
 
 A comunicação entre os nós foi validada utilizando hostname e endereço IP.
 
-Exemplo:
-
 ```bash
 ping -c 2 k8s-master-01
 ping -c 2 k8s-worker-01
@@ -370,35 +370,6 @@ getent hosts k8s-master-01
 getent hosts k8s-worker-01
 getent hosts k8s-worker-02
 getent hosts nfs-server
-```
-
-Os nós estão configurados para comunicação através da rede:
-
-```text
-10.10.1.0/24
-```
-
----
-
-## 📁 Estrutura do Projeto
-
-```text
-homelab-proxmox-vms/
-│
-├── README.md
-│
-├── docs/
-│   ├── architecture.md
-│   └── network.md
-│
-├── scripts/
-│   ├── create-vm.sh
-│   ├── configure-network.sh
-│   ├── configure-hosts.sh
-│   ├── install-packages.sh
-│   └── check-vms.sh
-│
-└── .gitignore
 ```
 
 ---
@@ -433,13 +404,7 @@ pvesm status
 
 ```bash
 zpool status
-```
-
-```bash
 zpool list
-```
-
-```bash
 zfs list
 ```
 
@@ -447,6 +412,32 @@ zfs list
 
 ```bash
 qm list
+```
+
+---
+
+## 📁 Estrutura do Projeto
+
+```text
+homelab-proxmox-vms/
+│
+├── README.md
+│
+├── diagrams/
+│   └── homelab-architecture.png
+│
+├── docs/
+│   ├── architecture.md
+│   └── network.md
+│
+├── scripts/
+│   ├── create-vm.sh
+│   ├── configure-network.sh
+│   ├── configure-hosts.sh
+│   ├── install-packages.sh
+│   └── check-vms.sh
+│
+└── .gitignore
 ```
 
 ---
@@ -470,6 +461,7 @@ qm list
 * [x] Configuração do `/etc/hosts`
 * [x] Testes de conectividade entre as VMs
 * [x] Script de validação das VMs
+* [x] Diagrama da arquitetura
 * [ ] Configuração do NFS
 * [ ] Testes de montagem do NFS
 * [ ] Documentação final da infraestrutura
@@ -563,5 +555,6 @@ A infraestrutura está pronta para a próxima etapa: **configuração do servido
 ## 📄 Licença
 
 Este projeto foi desenvolvido para fins de estudo, laboratório e aprendizado prático de infraestrutura, virtualização, Linux e Kubernetes.
+
 
 
